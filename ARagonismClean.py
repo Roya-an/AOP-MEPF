@@ -11,14 +11,14 @@ INPUT_FILE = "tox21_ar_raw.xlsx"   # modify file name
 SHEET_NAME = 0                     
 THRESHOLD = 10.0  #modify it to 5, 10, 20
 
-# 输出文件
+# output
 OUTPUT_CLEAN = "tox21_ar_processed.xlsx"
 OUTPUT_CONFLICT = "tox21_ar_conflicting_smiles.xlsx"
 
 
 def load_file(file_path, sheet_name=0):
     """
-    根据文件后缀读取 Excel 或 CSV
+    read file
     """
     file_path = Path(file_path)
     suffix = file_path.suffix.lower()
@@ -34,12 +34,12 @@ def load_file(file_path, sheet_name=0):
 
 def normalize_channel_outcome(x):
     """
-    标准化 CHANNEL_OUTCOME
+    Normalization CHANNEL_OUTCOME
     """
     if pd.isna(x):
         return np.nan
     x = str(x).strip().lower()
-    # 统一可能出现的写法
+    
     if x in ["active", "active agonist"]:
         return "active"
     elif x in ["inactive", "inactive agonist"]:
@@ -50,7 +50,7 @@ def normalize_channel_outcome(x):
 
 def assign_label(row, threshold=10.0):
     """
-    根据规则赋标签：
+    labels：
     inactive -> negative / 0
     active and AC50 < threshold -> positive / 1
     active and AC50 >= threshold -> negative / 0
@@ -63,7 +63,7 @@ def assign_label(row, threshold=10.0):
 
     elif outcome == "active":
         if pd.isna(ac50):
-            # 你说已经删掉 inactive无AC50；这里保留防御性处理
+            
             return pd.Series([np.nan, np.nan])
         elif ac50 < threshold:
             return pd.Series(["positive", 1])
@@ -93,18 +93,15 @@ def main():
     # 3. Basic cleaning
     # =========================
     df = df.copy()
-
-    # 去掉SMILES缺失
     df = df[df["SMILES"].notna()].copy()
     df["SMILES"] = df["SMILES"].astype(str).str.strip()
 
-    # AC50转数值
     df["AC50"] = pd.to_numeric(df["AC50"], errors="coerce")
 
-    # 标准化 CHANNEL_OUTCOME
+    # Normolization CHANNEL_OUTCOME
     df["CHANNEL_OUTCOME_std"] = df["CHANNEL_OUTCOME"].apply(normalize_channel_outcome)
 
-    # 仅保留 active / inactive
+    # save active / inactive
     df = df[df["CHANNEL_OUTCOME_std"].isin(["active", "inactive"])].copy()
 
     print(f"Rows after basic cleaning: {len(df)}")
@@ -113,8 +110,6 @@ def main():
     # 4. Assign class label
     # =========================
     df[["class_note", "label"]] = df.apply(assign_label, axis=1, threshold=THRESHOLD)
-
-    # 去掉无法赋值的行
     df = df[df["label"].notna()].copy()
     df["label"] = df["label"].astype(int)
 
@@ -138,7 +133,6 @@ def main():
     # 6. Deduplicate non-conflicting rows by SMILES
     #    Keep the row with minimum AC50
     # =========================
-    # 对inactive记录也按最小AC50保留；如果某些inactive AC50为空，排序时放后
     df_non_conflict = df_non_conflict.sort_values(
         by=["SMILES", "AC50"],
         ascending=[True, True],
