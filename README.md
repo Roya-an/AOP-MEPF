@@ -2,11 +2,6 @@
 
 README for Prediction Models
 
-Manuscript Title: Multi-endpoint screening framework of reproductive toxicants in fish with machine learning
-Authors: Xuan Liu, Yanlun Zhang, Jiazhen Chen, Hongxia Yu, Hongling Liu
-Corresponding Contact: hlliu@nju.edu.cn
-Date: October 2026
-
 ---------
 
 1. REMARKS / OVERVIEW
