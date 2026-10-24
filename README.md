@@ -1,16 +1,16 @@
 #AOP-MEPF
 
-============================
 README for Prediction Models
-============================
+
 Manuscript Title: Multi-endpoint screening framework of reproductive toxicants in fish with machine learning
 Authors: Xuan Liu, Yanlun Zhang, Jiazhen Chen, Hongxia Yu, Hongling Liu
 Corresponding Contact: hlliu@nju.edu.cn
 Date: October 2026
 
-======================
+---------
+
 1. REMARKS / OVERVIEW
-======================
+
 This repository contains the Python source code used to develop and evaluate
 machine learning-based Quantitative Structure-Activity Relationship (QSAR)
 models for multiple in vitro and in vivo reproductive toxicity-related
@@ -47,9 +47,10 @@ Key characteristics of the repository include:
 - Explicit Applicability Domain (AD) analysis to define reliable prediction space
 - Exportable prediction tables and publication-ready visualizations
 
-======================================
+--------
+
 2. SYSTEM REQUIREMENTS & DEPENDENCIES
-======================================
+
 The scripts were developed and tested using Python 3.11+.
 
 The following Python packages are required to run the modeling scripts:
@@ -94,9 +95,10 @@ matplotlib==3.7.1
 seaborn==0.12.2
 Pillow==9.4.0
 
-=====================
+--------
+
 3. INPUT DATA FORMAT
-=====================
+
 Each modeling script typically requires two CSV files located in the working
 directory or specified by the user:
 
@@ -127,9 +129,10 @@ Important notes:
 - Only compounds with valid molecular structures and valid endpoint labels are
   retained for modeling.
 
-============================
+--------
+
 4. GENERAL MODELING WORKFLOW
-============================
+
 Although details may differ slightly among endpoint-specific scripts, the
 common workflow generally includes the following steps:
 
@@ -178,9 +181,10 @@ common workflow generally includes the following steps:
     - AD methods may vary by script, but are explicitly implemented for
       prediction reliability assessment
 
-=====================
+--------
+
 5. USAGE / EXECUTION
-=====================
+
 To execute the modeling pipeline, run the endpoint-specific Python script from
 the command line or terminal. Example commands:
 
@@ -199,9 +203,10 @@ Before execution, please ensure:
 - The endpoint column required by the script exists in the endpoint file
 - All required dependencies are installed
 
-=========================
+--------
+
 6. EXPECTED OUTPUT FILES
-=========================
+
 Upon successful execution, each script may generate an output directory or a set
 of output files in the working directory. The exact filenames may differ among
 scripts, but typical outputs include:
@@ -230,9 +235,10 @@ scripts, but typical outputs include:
   - train/test split annotations
   - tuned parameter summaries
 
-=======================
+--------
+
 7. PERFORMANCE METRICS
-=======================
+
 Depending on the endpoint-specific script, model performance may be assessed
 using one or more of the following metrics:
 
@@ -249,9 +255,9 @@ Some scripts may additionally report:
 - in-AD vs out-of-AD performance
 - threshold-dependent prediction summaries
 
-===================
+--------
 8. REPRODUCIBILITY
-===================
+
 To improve reproducibility, the scripts generally fix random seeds for Python,
 NumPy, and machine learning procedures whenever supported.
 
@@ -264,9 +270,10 @@ For the most consistent manuscript reproduction, please use:
 - the same script-specific parameter settings
 - the same input data files used in the study
 
-==================
+--------
+
 9. IMPORTANT NOTES
-==================
+
 - This repository contains endpoint-specific scripts; therefore, not every
   script will use the same preprocessing, feature selection, imbalance
   handling, or AD method.
@@ -277,8 +284,9 @@ For the most consistent manuscript reproduction, please use:
 - Users are encouraged to inspect the corresponding script for endpoint-specific
   implementation details before reproducing results.
 
-=============
+--------
+
 10. LICENSE
-=============
+
 This code is provided for peer review and academic reproduction purposes.
 All rights reserved pending publication.
