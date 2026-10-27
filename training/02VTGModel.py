@@ -632,42 +632,43 @@ def run_full_pipeline(cmp_path, end_path):
     df_train_out['Pred_Label'] = y_cv_pred
     df_train_out['Dataset'] = 'Training_CV'
     df_train_out['In_Domain'] = 'Yes'
-...     df_train_out['Distance_to_Centroid'] = 'N/A'
-...     
-...     df_pred_out['Prob_VTG'] = y_pred_prob
-...     df_pred_out['Pred_Label'] = (y_pred_prob >= best_th).astype(int)
-...     df_pred_out['Dataset'] = 'Prediction'
-...     df_pred_out['In_Domain'] = np.where(is_out_domain, 'No', 'Yes')
-...     df_pred_out['Distance_to_Centroid'] = dist_pred
-...     
-...     final_df = pd.concat([df_train_out, df_pred_out], ignore_index=True)
-...     final_df.to_csv(os.path.join(OUTPUT_DIR, 'Final_Predictions_with_AD.csv'), index=False)
-...     
-...     with open(os.path.join(OUTPUT_DIR, 'Manuscript_Report.txt'), 'w') as f:
-...         f.write(f"=== QSAR Model Report: {TARGET_NAME} ===\n")
-...         f.write(f"Class Balance (Train): {n_pos} Positive vs {n_neg} Negative\n")
-...         f.write(f"Model: SVM (RBF) with RFE Feature Selection & SMOTE\n")
-...         f.write(f"Features Selected: {len(final_names)}\n\n")
-...         
-...         f.write(f"--- Validation Metrics (5-Fold CV) ---\n")
-...         f.write(f"AUC: {auc_val:.4f}\n")
-...         f.write(f"MCC: {max_mcc:.4f}\n")
-...         f.write(f"Accuracy: {acc:.4f}\n")
-...         f.write(f"Sensitivity (Active): {sensitivity:.4f}\n")
-...         f.write(f"Specificity (Inactive): {specificity:.4f}\n")
-...         f.write(f"Optimal Threshold: {best_th:.2f}\n\n")
-...         
-...         f.write(f"--- Selected Features List (Sorted by Importance) ---\n")
-...         sorted_idx = np.argsort(perm_result.importances_mean)[::-1]
-...         for idx in sorted_idx:
-...             f.write(f"{final_names[idx]} : {perm_result.importances_mean[idx]:.4f}\n")
-...             
-...     print(f"\n[Completed] Result saved to: {OUTPUT_DIR}")
-... 
-... if __name__ == "__main__":
-...     cmp_file = 'compounds.csv'
-...     end_file = 'endpoints.csv'
-...     
-...     if os.path.exists(cmp_file) and os.path.exists(end_file):
-...         run_full_pipeline(cmp_file, end_file)
-...     else:
+    df_train_out['Distance_to_KNN'] = 'N/A'
+     
+    df_pred_out['Prob_VTG'] = y_pred_prob
+    df_pred_out['Pred_Label'] = (y_pred_prob >= best_th).astype(int)
+    df_pred_out['Dataset'] = 'Prediction'
+    df_pred_out['In_Domain'] = np.where(is_out_domain, 'No', 'Yes')
+    df_pred_out['Distance_to_KNN'] = dist_pred
+      
+    final_df = pd.concat([df_train_out, df_pred_out], ignore_index=True)
+    final_df.to_csv(os.path.join(OUTPUT_DIR, 'Final_Predictions_with_AD.csv'), index=False)
+       
+    with open(os.path.join(OUTPUT_DIR, 'Manuscript_Report.txt'), 'w') as f:
+      f.write(f"=== QSAR Model Report: {TARGET_NAME} ===\n")
+      f.write(f"Class Balance (Train): {n_pos} Positive vs {n_neg} Negative\n")
+      f.write(f"Model: SVM (RBF) with RFE Feature Selection & SMOTE\n")
+      f.write(f"Features Selected: {len(final_names)}\n\n")
+          
+      f.write(f"--- Validation Metrics (5-Fold CV) ---\n")
+      f.write(f"AUC: {auc_val:.4f}\n")
+      f.write(f"MCC: {max_mcc:.4f}\n")
+      f.write(f"Accuracy: {acc:.4f}\n")
+      f.write(f"Sensitivity (Active): {sensitivity:.4f}\n")
+      f.write(f"Specificity (Inactive): {specificity:.4f}\n")
+      f.write(f"Optimal Threshold: {best_th:.2f}\n\n")
+         
+      f.write(f"--- Selected Features List (Sorted by Importance) ---\n")
+      sorted_idx = np.argsort(perm_result.importances_mean)[::-1]
+      for idx in sorted_idx:
+        f.write(f"{final_names[idx]} : {perm_result.importances_mean[idx]:.4f}\n")
+              
+      print(f"\n[Completed] Result saved to: {OUTPUT_DIR}")
+  
+   if __name__ == "__main__":
+     cmp_file = 'compounds.csv'
+     end_file = 'endpoints.csv'
+      
+     if os.path.exists(cmp_file) and os.path.exists(end_file):
+       run_full_pipeline(cmp_file, end_file)
+     else:
+       print(f"Error：input file {cmp_file} or {end_file} not found")
