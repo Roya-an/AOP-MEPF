@@ -614,13 +614,13 @@ def run_full_pipeline(cmp_path, end_path):
     df_train_out['Pred_Label'] = y_cv_pred
     df_train_out['Dataset'] = 'Training_CV'
     df_train_out['In_Domain'] = 'Yes'
-    df_train_out['Distance_to_Centroid'] = 'N/A'
+    df_train_out['Distance_to_KNN'] = 'N/A'
     
     df_pred_out['Prob_Reproduction'] = y_pred_prob
     df_pred_out['Pred_Label'] = (y_pred_prob >= best_th).astype(int)
     df_pred_out['Dataset'] = 'Prediction'
     df_pred_out['In_Domain'] = np.where(is_out_domain, 'No', 'Yes')
-    df_pred_out['Distance_to_Centroid'] = dist_pred
+    df_pred_out['Distance_to_KNN'] = dist_pred
     
     final_df = pd.concat([df_train_out, df_pred_out], ignore_index=True)
     final_df.to_csv(os.path.join(OUTPUT_DIR, 'Final_Predictions_with_AD.csv'), index=False)
