@@ -539,7 +539,7 @@ def run_full_pipeline(cmp_path, end_path):
             'Pred_Label': (y_pred_prob >= best_th).astype(int),
             'Dataset': 'Prediction',
             'In_Domain': np.where(~is_out, 'Yes', 'No'),        
-            'Distance_to_Centroid': np.round(dists, 4)
+            'Distance_to_KNN': np.round(dists, 4)
         })
         
         # Merge training set and prediction set
@@ -548,7 +548,7 @@ def run_full_pipeline(cmp_path, end_path):
         final_df = df_train_out.copy()
 
     column_order = ['CID', 'SMILES', 'Testosterone', 'Prob_Testosterone', 
-                    'Pred_Label', 'Dataset', 'In_Domain', 'Distance_to_Centroid']
+                    'Pred_Label', 'Dataset', 'In_Domain', 'Distance_to_KNN']
     final_df = final_df[column_order]
     
     print(f"  Number of samples outside the domain: {sum(is_out)} / {len(X_pred)}")
