@@ -23,10 +23,15 @@ Type "help", "copyright", "credits" or "license()" for more information.
 ... from sklearn.svm import SVC
 ... from sklearn.decomposition import PCA
 ... from sklearn.metrics import (
-...     roc_auc_score, matthews_corrcoef, recall_score,
-...     accuracy_score, precision_score, f1_score,
-...     roc_curve, confusion_matrix
-... )
+    roc_auc_score,
+    matthews_corrcoef,
+    accuracy_score,
+    roc_curve,
+    confusion_matrix,
+    precision_recall_curve,
+    auc,
+    balanced_accuracy_score,
+)
 ... from sklearn.neighbors import NearestNeighbors
 ... 
 ... # Boruta for feature selection
@@ -148,7 +153,50 @@ def safe_sensitivity(y_true: np.ndarray, y_pred: np.ndarray) -> float:
         return np.nan
     return recall_score(y_true, y_pred)
 
+def safe_pr_auc(y_true: np.ndarray, y_prob: np.ndarray) -> float:
+    """
+    Computes the area under the Precision–Recall curve using
+    trapezoidal integration.
 
+    Positive class: 1 (active).
+
+    Returns np.nan if y_true is empty or contains only one class,
+    because such subsets do not support an informative evaluation
+    of discrimination between active and inactive compounds.
+    """
+    y_true = np.asarray(y_true)
+    y_prob = np.asarray(y_prob)
+
+    if len(y_true) == 0 or len(np.unique(y_true)) < 2:
+        return np.nan
+
+    precision, recall, _ = precision_recall_curve(
+        y_true,
+        y_prob,
+        pos_label=1
+    )
+
+    return float(auc(recall, precision))
+
+
+def safe_balanced_accuracy(
+    y_true: np.ndarray,
+    y_pred: np.ndarray
+) -> float:
+    """
+    Balanced accuracy = (Sensitivity + Specificity) / 2.
+
+    Returns np.nan if y_true is empty or contains only one class,
+    because both class-specific recalls are required.
+    """
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+
+    if len(y_true) == 0 or len(np.unique(y_true)) < 2:
+        return np.nan
+
+    return float(balanced_accuracy_score(y_true, y_pred))
+    
 def calculate_metrics(
     y_true: np.ndarray,
     y_prob: np.ndarray,
@@ -156,21 +204,43 @@ def calculate_metrics(
     model_name: str,
     dataset_type: str
 ) -> Dict[str, Any]:
+
+    y_true = np.asarray(y_true)
+    y_prob = np.asarray(y_prob)
+    y_pred = np.asarray(y_pred)
+
+    n_samples = len(y_true)
+    n_active = int(np.sum(y_true == 1))
+    n_inactive = int(np.sum(y_true == 0))
+
     return {
         'Model': model_name,
         'Dataset': dataset_type,
-        'N_Samples': len(y_true),
-        'N_Active': int(np.sum(y_true == 1)),
-        'N_Inactive': int(np.sum(y_true == 0)),
+        'N_Samples': n_samples,
+        'N_Active': n_active,
+        'N_Inactive': n_inactive,
+        'Active_Prevalence': (
+            n_active / n_samples if n_samples > 0 else np.nan
+        ),
         'AUC': safe_auc(y_true, y_prob),
+        'PR_AUC': safe_pr_auc(y_true, y_prob),
         'MCC': safe_mcc(y_true, y_pred),
-        'Accuracy': accuracy_score(y_true, y_pred) if len(y_true) > 0 else np.nan,
-        'Precision': precision_score(y_true, y_pred, zero_division=0) if len(y_true) > 0 else np.nan,
+        'Accuracy': (
+            accuracy_score(y_true, y_pred)
+            if n_samples > 0 else np.nan
+        ),
+        'Balanced_Accuracy': safe_balanced_accuracy(y_true, y_pred),
+        'Precision': (
+            precision_score(y_true, y_pred, zero_division=0)
+            if n_samples > 0 else np.nan
+        ),
         'Sensitivity': safe_sensitivity(y_true, y_pred),
         'Specificity': safe_specificity(y_true, y_pred),
-        'F1_Score': f1_score(y_true, y_pred, zero_division=0) if len(y_true) > 0 else np.nan
+        'F1_Score': (
+            f1_score(y_true, y_pred, zero_division=0)
+            if n_samples > 0 else np.nan
+        )
     }
-
 
 # =====================================================================
 # Applicability Domain (AD) functions
@@ -178,30 +248,57 @@ def calculate_metrics(
 
 def build_knn_applicability_domain(
     X_train: np.ndarray,
-    k: int = 5,
-    percentile: float = 95.0
+    k: int = 5
 ) -> Dict[str, Any]:
+    
+    X_train = np.asarray(X_train)
+
+    if X_train.ndim != 2:
+        raise ValueError("X_train must be a two-dimensional array.")
 
     n_train = X_train.shape[0]
-    k_eff = min(k, max(1, n_train - 1))
 
-    nn = NearestNeighbors(n_neighbors=k_eff + 1, metric='euclidean', n_jobs=-1)
+    if n_train < 2:
+        raise ValueError(
+            "At least two training samples are required to build the AD."
+        )
+
+    if X_train.shape[1] == 0:
+        raise ValueError(
+            "No selected features are available for building the AD."
+        )
+
+    if not isinstance(k, (int, np.integer)) or k < 1:
+        raise ValueError("k must be a positive integer.")
+
+    k_eff = min(k, n_train - 1)
+
+    nn = NearestNeighbors(
+        n_neighbors=k_eff + 1,
+        metric='euclidean',
+        n_jobs=-1
+    )
     nn.fit(X_train)
 
     distances_train, _ = nn.kneighbors(X_train)
-    # remove self-distance in column 0
+
+    # Exclude one zero-distance self-neighbor.
     mean_train_dist = distances_train[:, 1:k_eff + 1].mean(axis=1)
 
-    threshold = np.percentile(mean_train_dist, percentile)
+    distance_mean = float(np.mean(mean_train_dist))
+    distance_std = float(np.std(mean_train_dist, ddof=1))
+    threshold = distance_mean + 3.0 * distance_std
 
     return {
         'nn_model': nn,
         'k': k_eff,
-        'percentile': percentile,
-        'threshold': threshold,
+        'threshold_method': 'mean_plus_3_std',
+        'distance_mean': distance_mean,
+        'distance_std': distance_std,
+        'std_ddof': 1,
+        'threshold': float(threshold),
         'train_mean_knn_dist': mean_train_dist
     }
-
 
 def predict_applicability_domain(
     X_query: np.ndarray,
@@ -218,7 +315,6 @@ def predict_applicability_domain(
 
     return mean_query_dist, in_ad_mask
 
-
 def calculate_subset_metrics(
     y_true: np.ndarray,
     y_prob: np.ndarray,
@@ -228,23 +324,12 @@ def calculate_subset_metrics(
     subset_name: str
 ) -> Dict[str, Any]:
     """
-    Calculates metrics for a masked subset (e.g., AD_in, AD_out).
+    Calculates metrics for a masked subset, including empty subsets.
     """
-    if mask.sum() == 0:
-        return {
-            'Model': model_name,
-            'Dataset': subset_name,
-            'N_Samples': 0,
-            'N_Active': 0,
-            'N_Inactive': 0,
-            'AUC': np.nan,
-            'MCC': np.nan,
-            'Accuracy': np.nan,
-            'Precision': np.nan,
-            'Sensitivity': np.nan,
-            'Specificity': np.nan,
-            'F1_Score': np.nan
-        }
+    y_true = np.asarray(y_true)
+    y_prob = np.asarray(y_prob)
+    y_pred = np.asarray(y_pred)
+    mask = np.asarray(mask, dtype=bool)
 
     return calculate_metrics(
         y_true=y_true[mask],
@@ -253,7 +338,6 @@ def calculate_subset_metrics(
         model_name=model_name,
         dataset_type=subset_name
     )
-
 
 # =====================================================================
 # Plotting
@@ -476,16 +560,40 @@ def run_modeling_pipeline(cmp_path: str, end_path: str) -> None:
 
     # 5. Applicability Domain
     print("[5/6] Building applicability domain (AD) model using training set only...")
-    ad_model = build_knn_applicability_domain(X_train_sel, k=5, percentile=95.0)
-    test_ad_distance, test_in_ad_mask = predict_applicability_domain(X_test_sel, ad_model)
+    ad_model = build_knn_applicability_domain(
+        X_train_sel,
+        k=5
+    )
 
-    print(f"      AD method: kNN distance")
+    test_ad_distance, test_in_ad_mask = predict_applicability_domain(
+        X_test_sel,
+        ad_model
+    )
+
+    print("      AD method: kNN distance")
     print(f"      k = {ad_model['k']}")
-    print(f"      Threshold percentile = {ad_model['percentile']}")
-    print(f"      AD distance threshold = {ad_model['threshold']:.6f}")
-    print(f"      Test samples in AD: {np.sum(test_in_ad_mask)} / {len(test_in_ad_mask)}")
-    print(f"      Test samples out of AD: {np.sum(~test_in_ad_mask)} / {len(test_in_ad_mask)}")
-
+    print("      Threshold rule: mean + 3 × standard deviation")
+    print("      Standard deviation convention: sample SD (ddof=1)")
+    print(
+        f"      Training mean kNN distance = "
+        f"{ad_model['distance_mean']:.6f}"
+    )
+    print(
+        f"      Training kNN distance SD = "
+        f"{ad_model['distance_std']:.6f}"
+    )
+    print(
+        f"      AD distance threshold = "
+        f"{ad_model['threshold']:.6f}"
+    )
+    print(
+        f"      Test samples in AD: "
+        f"{np.sum(test_in_ad_mask)} / {len(test_in_ad_mask)}"
+    )
+    print(
+        f"      Test samples out of AD: "
+        f"{np.sum(~test_in_ad_mask)} / {len(test_in_ad_mask)}"
+    )
     # store AD info
     df_valid['AD_Status'] = np.nan
     df_valid['AD_Mean_kNN_Distance'] = np.nan
@@ -559,13 +667,20 @@ def run_modeling_pipeline(cmp_path: str, end_path: str) -> None:
         df_valid.loc[train_idx, f'{algo}_Pred'] = y_train_pred
         df_valid.loc[test_idx, f'{algo}_Prob'] = y_test_prob
         df_valid.loc[test_idx, f'{algo}_Pred'] = y_test_pred
-
+        
         print(
-            f"         Test AUC: {test_metrics['AUC']:.4f} | "
+            f"         Test ROC-AUC: {test_metrics['AUC']:.4f} | "
+            f"Test PR-AUC: {test_metrics['PR_AUC']:.4f} | "
+            f"Test Balanced Accuracy: "
+            f"{test_metrics['Balanced_Accuracy']:.4f} | "
             f"Test MCC: {test_metrics['MCC']:.4f} | "
             f"Test F1: {test_metrics['F1_Score']:.4f}"
         )
 
+        print(
+            f"         Test active prevalence: "
+            f"{test_metrics['Active_Prevalence']:.4f}"
+        )
         if representative_test_in_ad_mask is None:
             representative_test_in_ad_mask = test_in_ad_mask
 
