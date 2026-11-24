@@ -582,12 +582,13 @@ def run_full_pipeline(cmp_path, end_path):
         if mcc > max_mcc: max_mcc = mcc; best_th = th
     
     y_cv_pred = (y_cv_prob >= best_th).astype(int)
-    
+
     auc_val = roc_auc_score(y_train, y_cv_prob)
-    pr_precision, pr_recall, _ = precision_recall_curve(
+    precision, recall, _ = precision_recall_curve(
         y_train, y_cv_prob, pos_label=1
     )
-    pr_auc_val = auc(pr_recall, pr_precision)
+    pr_auc_val = auc(recall, precision)
+    positive_prevalence = np.mean(y_train == 1)
 
     tn, fp, fn, tp = confusion_matrix(
         y_train, y_cv_pred, labels=[0, 1]
@@ -597,8 +598,6 @@ def run_full_pipeline(cmp_path, end_path):
     acc = accuracy_score(y_train, y_cv_pred)
     balanced_acc_val = balanced_accuracy_score(y_train, y_cv_pred)
 
-    positive_prevalence = np.mean(y_train == 1)
-
     print("\n   Pooled out-of-fold results (5-fold CV):")
     print(f"   ROC-AUC: {auc_val:.3f}")
     print(f"   PR-AUC (trapezoidal): {pr_auc_val:.3f}")
@@ -606,13 +605,12 @@ def run_full_pipeline(cmp_path, end_path):
     print(f"   MCC: {max_mcc:.3f}")
     print(f"   Accuracy: {acc:.3f}")
     print(f"   Balanced Accuracy: {balanced_acc_val:.3f}")
-    print(f"   Sensitivity (Active recall): {sensitivity:.3f}")
-    print(f"   Specificity (Inactive recall): {specificity:.3f}")
-    print(f"   Optimal Threshold: {best_th:.2f}")
+    print(f"   Sensitivity (HIS positive): {sensitivity:.3f}")
+    print(f"   Specificity (HIS negative): {specificity:.3f}")
+    print(f"   optimal threshold: {best_th:.2f}")
 
     plot_roc_curve(y_train, y_cv_prob, auc_val, OUTPUT_DIR)
     plot_confusion_matrix(y_train, y_cv_pred, OUTPUT_DIR)
-  
     # ==========================================
     # --- F. Feature consistency analysis ---
     # ==========================================
@@ -673,18 +671,16 @@ def run_full_pipeline(cmp_path, end_path):
         f.write(f"Class Balance (Train): {n_pos} Positive vs {n_neg} Negative\n")
         f.write(f"Model: SVM (RBF) with RFE Feature Selection & SMOTE\n")
         f.write(f"Features Selected: {len(final_names)}\n\n")
-        
-        f.write("--- Validation Metrics (5-Fold CV) ---\n")
+
+        f.write("---  Validation Metrics (5-Fold CV) ---\n")
         f.write(f"ROC-AUC: {auc_val:.4f}\n")
         f.write(f"PR-AUC (trapezoidal): {pr_auc_val:.4f}\n")
-        f.write(
-            f"Positive Prevalence (PR Baseline): {positive_prevalence:.4f}\n"
-        )
+        f.write(f"Positive Prevalence (PR Baseline): {positive_prevalence:.4f}\n")
         f.write(f"MCC: {max_mcc:.4f}\n")
         f.write(f"Accuracy: {acc:.4f}\n")
         f.write(f"Balanced Accuracy: {balanced_acc_val:.4f}\n")
-        f.write(f"Sensitivity (Active): {sensitivity:.4f}\n")
-        f.write(f"Specificity (Inactive): {specificity:.4f}\n")
+        f.write(f"Sensitivity (HIS Positive): {sensitivity:.4f}\n")
+        f.write(f"Specificity (HIS Negative): {specificity:.4f}\n")
         f.write(f"Optimal Threshold: {best_th:.2f}\n\n")
       
         f.write(f"--- Selected Features List (Sorted by Importance) ---\n")
