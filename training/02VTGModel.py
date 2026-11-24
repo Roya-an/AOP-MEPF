@@ -1,5 +1,3 @@
-Python 3.11.6 (tags/v3.11.6:8b6ee5b, Oct  2 2023, 14:57:12) [MSC v.1935 64 bit (AMD64)] on win32
-Type "help", "copyright", "credits" or "license()" for more information.
 """
 ==============================================================================
 2-Project: Machine Learning-based QSAR Modeling for Vitellogenin (VTG) Prediction
@@ -17,8 +15,16 @@ from rdkit.Chem import Descriptors, AllChem, MACCSkeys, Draw
 from sklearn.model_selection import GridSearchCV, cross_val_predict, StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.feature_selection import VarianceThreshold, RFE
-from sklearn.metrics import (roc_auc_score, matthews_corrcoef, accuracy_score, 
-                             roc_curve, confusion_matrix)
+from sklearn.metrics import (
+    roc_auc_score,
+    matthews_corrcoef,
+    accuracy_score,
+    roc_curve,
+    confusion_matrix,
+    precision_recall_curve,
+    auc,
+    balanced_accuracy_score,
+)
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn.inspection import permutation_importance
@@ -572,22 +578,38 @@ def run_full_pipeline(cmp_path, end_path):
         mcc = matthews_corrcoef(y_train, pred_bin)
         if mcc > max_mcc: max_mcc = mcc; best_th = th
             
+ 
     y_cv_pred = (y_cv_prob >= best_th).astype(int)
     auc_val = roc_auc_score(y_train, y_cv_prob)
-    tn, fp, fn, tp = confusion_matrix(y_train, y_cv_pred).ravel()
-    sensitivity = tp / (tp + fn) 
-    specificity = tn / (tn + fp) 
+    precision, recall, _ = precision_recall_curve(
+        y_train, y_cv_prob, pos_label=1
+    )
+    pr_auc_val = auc(recall, precision)
+
+    positive_prevalence = np.mean(y_train == 1)
+
+    tn, fp, fn, tp = confusion_matrix(
+        y_train, y_cv_pred, labels=[0, 1]
+    ).ravel()
+    sensitivity = tp / (tp + fn)
+    specificity = tn / (tn + fp)
     acc = accuracy_score(y_train, y_cv_pred)
-    
-    print(f"\n   Verification set results (5-Fold CV):")
-    print(f"   AUC: {auc_val:.3f}, MCC: {max_mcc:.3f}")
-    print(f"   Sensitivity (Active accuracy): {sensitivity:.3f}")
-    print(f"   Specificity (Inactive accuracy): {specificity:.3f}")
-    print(f"   optimal threshold: {best_th:.2f}")
-    
+    balanced_acc_val = balanced_accuracy_score(y_train, y_cv_pred)
+
+    print("\n   Pooled out-of-fold results (5-fold CV):")
+    print(f"   ROC-AUC: {auc_val:.3f}")
+    print(f"   PR-AUC (trapezoidal): {pr_auc_val:.3f}")
+    print(f"   Positive prevalence (PR baseline): {positive_prevalence:.3f}")
+    print(f"   MCC: {max_mcc:.3f}")
+    print(f"   Accuracy: {acc:.3f}")
+    print(f"   Balanced Accuracy: {balanced_acc_val:.3f}")
+    print(f"   Sensitivity (VTG positive): {sensitivity:.3f}")
+    print(f"   Specificity (VTG negative): {specificity:.3f}")
+    print(f"   Optimal Threshold: {best_th:.2f}")
+
     plot_roc_curve(y_train, y_cv_prob, auc_val, OUTPUT_DIR)
     plot_confusion_matrix(y_train, y_cv_pred, OUTPUT_DIR)
-
+  
     # ==========================================
     # --- F. Feature consistency analysis ---
     # ==========================================
@@ -643,32 +665,40 @@ def run_full_pipeline(cmp_path, end_path):
     final_df = pd.concat([df_train_out, df_pred_out], ignore_index=True)
     final_df.to_csv(os.path.join(OUTPUT_DIR, 'Final_Predictions_with_AD.csv'), index=False)
        
-    with open(os.path.join(OUTPUT_DIR, 'Manuscript_Report.txt'), 'w') as f:
-      f.write(f"=== QSAR Model Report: {TARGET_NAME} ===\n")
-      f.write(f"Class Balance (Train): {n_pos} Positive vs {n_neg} Negative\n")
-      f.write(f"Model: SVM (RBF) with RFE Feature Selection & SMOTE\n")
-      f.write(f"Features Selected: {len(final_names)}\n\n")
-          
-      f.write(f"--- Validation Metrics (5-Fold CV) ---\n")
-      f.write(f"AUC: {auc_val:.4f}\n")
-      f.write(f"MCC: {max_mcc:.4f}\n")
-      f.write(f"Accuracy: {acc:.4f}\n")
-      f.write(f"Sensitivity (Active): {sensitivity:.4f}\n")
-      f.write(f"Specificity (Inactive): {specificity:.4f}\n")
-      f.write(f"Optimal Threshold: {best_th:.2f}\n\n")
-         
-      f.write(f"--- Selected Features List (Sorted by Importance) ---\n")
-      sorted_idx = np.argsort(perm_result.importances_mean)[::-1]
-      for idx in sorted_idx:
-        f.write(f"{final_names[idx]} : {perm_result.importances_mean[idx]:.4f}\n")
-              
-      print(f"\n[Completed] Result saved to: {OUTPUT_DIR}")
-  
-   if __name__ == "__main__":
-     cmp_file = 'compounds.csv'
-     end_file = 'endpoints.csv'
-      
-     if os.path.exists(cmp_file) and os.path.exists(end_file):
-       run_full_pipeline(cmp_file, end_file)
-     else:
-       print(f"Error：input file {cmp_file} or {end_file} not found")
+    with open(
+        os.path.join(OUTPUT_DIR, 'Manuscript_Report.txt'),
+        'w',
+        encoding='utf-8',
+    ) as f:
+        f.write(f"=== QSAR Model Report: {TARGET_NAME} ===\n")
+        f.write(f"Class Balance (Train): {n_pos} Positive vs {n_neg} Negative\n")
+        f.write("Model: SVM (RBF) with RFE Feature Selection & SMOTE\n")
+        f.write(f"Features Selected: {len(final_names)}\n\n")
+
+        f.write("---  Validation Metrics (5-Fold CV) ---\n")
+        f.write(f"ROC-AUC: {auc_val:.4f}\n")
+        f.write(f"PR-AUC (trapezoidal): {pr_auc_val:.4f}\n")
+        f.write(f"Positive Prevalence (PR Baseline): {positive_prevalence:.4f}\n")
+        f.write(f"MCC: {max_mcc:.4f}\n")
+        f.write(f"Accuracy: {acc:.4f}\n")
+        f.write(f"Balanced Accuracy: {balanced_acc_val:.4f}\n")
+        f.write(f"Sensitivity (VTG Positive): {sensitivity:.4f}\n")
+        f.write(f"Specificity (VTG Negative): {specificity:.4f}\n")
+        f.write(f"Optimal Threshold: {best_th:.2f}\n\n")
+
+        f.write("--- Selected Features List (Sorted by Importance) ---\n")
+        sorted_idx = np.argsort(perm_result.importances_mean)[::-1]
+        for idx in sorted_idx:
+            f.write(f"{final_names[idx]} : {perm_result.importances_mean[idx]:.4f}\n")
+
+    print(f"\n[Completed] Result saved to: {OUTPUT_DIR}")
+
+
+if __name__ == "__main__":
+    cmp_file = 'compounds.csv'
+    end_file = 'endpoints.csv'
+
+    if os.path.exists(cmp_file) and os.path.exists(end_file):
+        run_full_pipeline(cmp_file, end_file)
+    else:
+        print(f"Error: input file {cmp_file} or {end_file} not found")
