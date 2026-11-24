@@ -15,8 +15,17 @@ from rdkit.Chem import Descriptors, AllChem, MACCSkeys, Draw
 from sklearn.model_selection import StratifiedKFold, cross_val_predict
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.feature_selection import VarianceThreshold, SelectFromModel
-from sklearn.metrics import (roc_auc_score, matthews_corrcoef, accuracy_score, 
-                             roc_curve, confusion_matrix, recall_score)
+from sklearn.metrics import (
+    roc_auc_score,
+    matthews_corrcoef,
+    accuracy_score,
+    roc_curve,
+    confusion_matrix,
+    recall_score,
+    precision_recall_curve,
+    auc,
+    balanced_accuracy_score,
+)
 from sklearn.ensemble import RandomForestClassifier
 from imblearn.ensemble import BalancedRandomForestClassifier 
 from imblearn.pipeline import Pipeline as ImbPipeline
@@ -302,10 +311,18 @@ def generate_manuscript_report(metrics, params, output_dir, feature_importances=
     with open(os.path.join(output_dir, 'Manuscript_Report.txt'), 'w', encoding='utf-8') as f:
         f.write(f"MODEL FINAL REPORT - {TARGET_NAME}\n" + "="*40 + "\n")
         f.write(f"1. Dataset Info:\n   Total Training: {metrics['train_size']} (Pos:{metrics['pos']}, Neg:{metrics['neg']})\n\n")
-        f.write(f"2. Validation (5-Fold CV):\n   AUC: {metrics['auc']:.3f}\n   MCC: {metrics['mcc']:.3f}\n")
-        f.write(f"   Accuracy: {metrics.get('accuracy', 0.0):.3f}\n") 
-        f.write(f"   Sensitivity: {metrics['sens']:.3f}\n   Specificity: {metrics['spec']:.3f}\n")
+
+        f.write("2.  Validation (5-Fold CV):\n")
+        f.write(f"   ROC-AUC: {metrics['auc']:.3f}\n")
+        f.write(f"   PR-AUC (trapezoidal): {metrics['pr_auc']:.3f}\n")
+        f.write(f"   Positive Prevalence (PR Baseline): {metrics['positive_prevalence']:.3f}\n")
+        f.write(f"   MCC: {metrics['mcc']:.3f}\n")
+        f.write(f"   Accuracy: {metrics['accuracy']:.3f}\n")
+        f.write(f"   Balanced Accuracy: {metrics['balanced_accuracy']:.3f}\n")
+        f.write(f"   Sensitivity (T Positive): {metrics['sens']:.3f}\n")
+        f.write(f"   Specificity (T Negative): {metrics['spec']:.3f}\n")
         f.write(f"   Threshold: {metrics['threshold']:.2f}\n\n")
+      
         f.write(f"3. Parameters:\n")
         for k, v in params.items(): 
             f.write(f"   {k}: {v}\n")
@@ -493,12 +510,37 @@ def run_full_pipeline(cmp_path, end_path):
         if g > max_gmean: max_gmean = g; best_th = th
     
     y_cv_pred = (y_cv_prob >= best_th).astype(int)
-    metrics = {'train_size': len(y_train), 'pos': sum(y_train==1), 'neg': sum(y_train==0),
-               'auc': roc_auc_score(y_train, y_cv_prob), 'mcc': matthews_corrcoef(y_train, y_cv_pred), 
-               'sens': recall_score(y_train, y_cv_pred), 'spec': recall_score(y_train, y_cv_pred, pos_label=0),
-               'threshold': best_th,
-               'accuracy': accuracy_score(y_train, y_cv_pred)}
-    
+    precision, recall, _ = precision_recall_curve(
+        y_train, y_cv_prob, pos_label=1
+    )
+    pr_auc_val = auc(recall, precision)
+
+    metrics = {
+        'train_size': len(y_train),
+        'pos': np.sum(y_train == 1),
+        'neg': np.sum(y_train == 0),
+        'auc': roc_auc_score(y_train, y_cv_prob),
+        'pr_auc': pr_auc_val,
+        'positive_prevalence': np.mean(y_train == 1),
+        'mcc': matthews_corrcoef(y_train, y_cv_pred),
+        'accuracy': accuracy_score(y_train, y_cv_pred),
+        'balanced_accuracy': balanced_accuracy_score(y_train, y_cv_pred),
+        'sens': recall_score(y_train, y_cv_pred, pos_label=1),
+        'spec': recall_score(y_train, y_cv_pred, pos_label=0),
+        'threshold': best_th,
+    }
+
+    print("\n   Internal 5-fold CV results (pooled predictions):")
+    print(f"   ROC-AUC: {metrics['auc']:.3f}")
+    print(f"   PR-AUC (trapezoidal): {metrics['pr_auc']:.3f}")
+    print(f"   Positive prevalence (PR baseline): {metrics['positive_prevalence']:.3f}")
+    print(f"   MCC: {metrics['mcc']:.3f}")
+    print(f"   Accuracy: {metrics['accuracy']:.3f}")
+    print(f"   Balanced Accuracy: {metrics['balanced_accuracy']:.3f}")
+    print(f"   Sensitivity (T positive): {metrics['sens']:.3f}")
+    print(f"   Specificity (T negative): {metrics['spec']:.3f}")
+    print(f"   Threshold: {metrics['threshold']:.2f}")
+  
     df_train_out['Prob_Testosterone'] = y_cv_prob
     df_train_out['Pred_Label'] = y_cv_pred
     df_train_out['Dataset'] = 'Training_CV'
